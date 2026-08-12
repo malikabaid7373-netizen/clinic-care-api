@@ -80,10 +80,22 @@ class AppointmentSerializer(serializers.ModelSerializer):
         ]
 
     def get_canCancel(self, obj):
-        return obj.status in {
+        if obj.status not in {
             Appointment.Status.PENDING,
             Appointment.Status.CONFIRMED,
-        }
+        }:
+            return False
+
+        today = timezone.localdate()
+        current_time = timezone.localtime().time().replace(microsecond=0)
+
+        return (
+            obj.appointment_date > today
+            or (
+                obj.appointment_date == today
+                and obj.appointment_time > current_time
+            )
+        )
 
     def validate_phone(self, value):
         phone = "".join(character for character in value.strip() if character not in " -()")

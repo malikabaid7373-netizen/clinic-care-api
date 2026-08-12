@@ -86,3 +86,45 @@ class AppointmentApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_past_appointment_cannot_be_cancelled(self):
+        appointment = Appointment.objects.create(
+            user=self.user,
+            doctor=self.doctor,
+            patient_name="Patient One",
+            phone="+966500000000",
+            email="one@example.com",
+            appointment_date=timezone.localdate() - timedelta(days=1),
+            appointment_time=time(10, 0),
+            consultation_fee=150,
+            status=Appointment.Status.CONFIRMED,
+        )
+
+        response = self.client.post(
+            reverse("appointment-cancel", args=[appointment.id]),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.status, Appointment.Status.CONFIRMED)
+
+    def test_serializer_hides_cancel_for_past_appointment(self):
+        appointment = Appointment.objects.create(
+            user=self.user,
+            doctor=self.doctor,
+            patient_name="Patient One",
+            phone="+966500000000",
+            email="one@example.com",
+            appointment_date=timezone.localdate() - timedelta(days=1),
+            appointment_time=time(10, 0),
+            consultation_fee=150,
+            status=Appointment.Status.PENDING,
+        )
+
+        response = self.client.get(
+            reverse("appointment-detail", args=[appointment.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["canCancel"])

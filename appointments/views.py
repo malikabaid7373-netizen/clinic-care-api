@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -28,8 +29,10 @@ class AppointmentViewSet(
     def summary(self, request):
         queryset = self.get_queryset()
         today = timezone.localdate()
+        current_time = timezone.localtime().time().replace(microsecond=0)
         upcoming = queryset.filter(
-            appointment_date__gte=today,
+            Q(appointment_date__gt=today)
+            | Q(appointment_date=today, appointment_time__gt=current_time),
             status__in=[
                 Appointment.Status.PENDING,
                 Appointment.Status.CONFIRMED,
@@ -76,6 +79,22 @@ class AppointmentViewSet(
         if appointment.status == Appointment.Status.COMPLETED:
             return Response(
                 {"detail": "Completed appointment cannot be cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.localdate()
+        current_time = timezone.localtime().time().replace(microsecond=0)
+        is_future = (
+            appointment.appointment_date > today
+            or (
+                appointment.appointment_date == today
+                and appointment.appointment_time > current_time
+            )
+        )
+
+        if not is_future:
+            return Response(
+                {"detail": "Past appointments cannot be cancelled."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
